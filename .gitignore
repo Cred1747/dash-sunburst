@@ -1,0 +1,19 @@
+# Ignore Python cache and compiled files
+__pycache__/
+*.pyc
+
+# Ignore environment files
+.env
+
+# Ignore system/OS files
+.DS_Store
+
+# Ignore data files (optional)
+*.csv
+*.xlsx
+*.tsv
+*.db
+
+# Ignore virtual environments
+venv/
+.env/
