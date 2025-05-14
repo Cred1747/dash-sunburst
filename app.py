@@ -34,7 +34,8 @@ app.layout = html.Div([
         dcc.Dropdown(["Both", "Positive", "Negative"], id="sentiment", value="Both", clearable=False),
     ], style={"width": "30%", "display": "inline-block", "margin": "10px"}),
 
-    dcc.Graph(id="sunburst")
+    dcc.Graph(id="sunburst"),
+    html.Div(id="custom_legend", style={"padding": "20px"})
 ])
 
 # === Color palette ===
@@ -45,7 +46,7 @@ cb_palette = [
     "#F0E442", "#0072B2", "#D55E00", "#CC79A7"
 ]
 
-# === Load function (uses wildcards to match real filenames) ===
+# === Load function ===
 def load_data(base_path, sentiment, target, k):
     doc_pattern = f"{sentiment.lower()}_{target}_*k={k}*document_info.csv"
     rep_pattern = f"{sentiment.lower()}_{target}_*k={k}*topic_representation.csv"
@@ -65,6 +66,7 @@ def load_data(base_path, sentiment, target, k):
 # === Dash Callback ===
 @app.callback(
     Output("sunburst", "figure"),
+    Output("custom_legend", "children"),
     Input("target", "value"),
     Input("k", "value"),
     Input("sentiment", "value")
@@ -82,12 +84,11 @@ def update_sunburst(target, k, selected_sentiment):
             all_topics.append(topics)
 
     if not all_docs or not all_topics:
-        return go.Figure().update_layout(title="No data found.")
+        return go.Figure().update_layout(title="No data found."), ""
 
     docs_df = pd.concat(all_docs)
     topics_df = pd.concat(all_topics)
 
-    # Label cleaning
     def clean_label(label, top_n=4):
         try:
             parts = label.strip("[]").replace("'", "").split(", ")
@@ -109,7 +110,6 @@ def update_sunburst(target, k, selected_sentiment):
     sentiment_counts = docs_df["Sentiment"].value_counts().reset_index()
     sentiment_counts.columns = ["Sentiment", "Doc_Count"]
 
-    # Build sunburst
     labels, ids, parents, values, colors = [], [], [], [], []
     color_map = {}
     color_idx = 0
@@ -145,7 +145,8 @@ def update_sunburst(target, k, selected_sentiment):
         values=values,
         marker=dict(colors=colors),
         branchvalues="total",
-        hovertemplate='<b>%{label}</b><br>Posts: %{value}<extra></extra>'
+        hovertemplate='<b>%{label}</b><br>Posts: %{value}<extra></extra>',
+        textinfo='label+percent entry+value'
     ))
 
     fig.update_layout(
@@ -153,7 +154,14 @@ def update_sunburst(target, k, selected_sentiment):
         title=f"Sunburst: {target} | k = {k} | Sentiment = {selected_sentiment}"
     )
 
-    return fig
+    legend_items = [
+        html.Div([
+            html.Span(style={"display": "inline-block", "width": "15px", "height": "15px", "backgroundColor": color_map[label], "marginRight": "8px"}),
+            label
+        ], style={"marginBottom": "5px"}) for label in color_map
+    ]
+
+    return fig, legend_items
     
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
