@@ -3,10 +3,12 @@ import re
 import glob
 import pandas as pd
 import plotly.graph_objects as go
-from dash import Dash, dcc, html, Input, Output
+from dash import Dash, dcc, html, Input, Output, State
 
 app = Dash(__name__)
 data_dir = "data"
+cached_docs_df = pd.DataFrame()
+cached_topic_labels = {}
 
 # Detect available targets
 available_targets = sorted([d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))])
@@ -35,7 +37,21 @@ app.layout = html.Div([
     ], style={"width": "30%", "display": "inline-block", "margin": "10px"}),
 
     dcc.Graph(id="sunburst"),
-    html.Div(id="custom_legend", style={"padding": "20px"})
+    html.Div(id="custom_legend", style={"padding": "20px"}),
+
+    html.Div([
+        html.Label("Number of Tweets to Display:"),
+        dcc.Dropdown(
+            options=[
+                {"label": str(n), "value": n} for n in [5, 10, 20, 50, 100, "All"]
+            ],
+            value=10,
+            id="tweet_count_dropdown",
+            clearable=False
+        )
+    ], style={"width": "30%", "margin": "10px"}),
+
+    html.Div(id="tweet_output", style={"padding": "20px", "maxHeight": "500px", "overflowY": "scroll", "borderTop": "1px solid #ccc"})
 ])
 
 # === Color palette ===
@@ -63,7 +79,6 @@ def load_data(base_path, sentiment, target, k):
     reps["Topic"] = pd.to_numeric(reps["Topic"], errors="coerce")
     return docs, reps
 
-# === Dash Callback ===
 @app.callback(
     Output("sunburst", "figure"),
     Output("custom_legend", "children"),
@@ -72,6 +87,7 @@ def load_data(base_path, sentiment, target, k):
     Input("sentiment", "value")
 )
 def update_sunburst(target, k, selected_sentiment):
+    global cached_docs_df, cached_topic_labels
     base_path = os.path.join(data_dir, target)
     sentiments = ["Positive", "Negative"] if selected_sentiment == "Both" else [selected_sentiment]
 
@@ -88,6 +104,7 @@ def update_sunburst(target, k, selected_sentiment):
 
     docs_df = pd.concat(all_docs)
     topics_df = pd.concat(all_topics)
+    cached_docs_df = docs_df.copy()
 
     def clean_label(label, top_n=4):
         try:
@@ -101,12 +118,12 @@ def update_sunburst(target, k, selected_sentiment):
 
     topic_map = dict(zip(zip(topics_df["Sentiment"], topics_df["Topic"]), topics_df["Clean_Label"]))
     topic_id_map = dict(zip(zip(topics_df["Sentiment"], topics_df["Topic"]), topics_df["Topic_ID"]))
+    cached_topic_labels = topic_map.copy()
 
     docs_df["Topic"] = pd.to_numeric(docs_df["Topic"], errors="coerce")
-    docs_df["Topic_Label"] = docs_df.apply(lambda row: topic_map.get((row["Sentiment"], row["Topic"]), "Unknown"), axis=1)
     docs_df["Topic_ID"] = docs_df.apply(lambda row: topic_id_map.get((row["Sentiment"], row["Topic"]), "Unknown"), axis=1)
 
-    topic_counts = docs_df.groupby(["Sentiment", "Topic_ID", "Topic_Label"]).size().reset_index(name="Doc_Count")
+    topic_counts = docs_df.groupby(["Sentiment", "Topic_ID", "Topic"]).size().reset_index(name="Doc_Count")
     sentiment_counts = docs_df["Sentiment"].value_counts().reset_index()
     sentiment_counts.columns = ["Sentiment", "Doc_Count"]
 
@@ -123,7 +140,8 @@ def update_sunburst(target, k, selected_sentiment):
         colors.append("lightblue" if sentiment == "Negative" else "salmon")
 
     for _, row in topic_counts.iterrows():
-        label = row["Topic_Label"]
+        topic_number = row["Topic"]
+        label = topic_map.get((row["Sentiment"], topic_number), str(topic_number))
         tid = row["Topic_ID"]
         sentiment = row["Sentiment"]
         doc_count = row["Doc_Count"]
@@ -162,10 +180,53 @@ def update_sunburst(target, k, selected_sentiment):
     ]
 
     return fig, legend_items
-    
+
+@app.callback(
+    Output("tweet_output", "children"),
+    Input("sunburst", "clickData"),
+    Input("tweet_count_dropdown", "value")
+)
+def display_tweets(clickData, tweet_count):
+    if not clickData or "label" not in clickData["points"][0]:
+        return "Click a topic to view tweets."
+
+    label = clickData["points"][0]["label"]
+
+    if 'cached_docs_df' not in globals() or cached_docs_df.empty:
+        return "No data loaded."
+
+    topic_number = None
+    for (sentiment, topic), clean in cached_topic_labels.items():
+        if clean == label:
+            topic_number = topic
+            break
+
+    if topic_number is None:
+        try:
+            topic_number = int(label)
+        except ValueError:
+            return f"'{label}' is not a numeric topic."
+
+    df = cached_docs_df[cached_docs_df["Topic"] == topic_number]
+    if df.empty:
+        return f"No tweets found for topic {topic_number}"
+
+    tweet_col = "original_text" if "original_text" in df.columns else df.columns[0]
+    tweets = df[tweet_col].dropna().astype(str)
+
+    if tweet_count != "All":
+        tweets = tweets.head(int(tweet_count))
+
+    return html.Div([
+        html.H4(f"Top Tweets for Topic {topic_number}"),
+        html.Ul([html.Li(tweet) for tweet in tweets])
+    ])
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
+
 
 
 
