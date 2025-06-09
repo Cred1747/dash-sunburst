@@ -1,0 +1,27 @@
+app = "dash-sunburst"  # <- Replace with your Fly app name
+
+primary_region = "iad"  # or choose another: sjc, sea, lax, etc.
+
+[env]
+PORT = "10000"
+
+[build]
+# No build instructions needed for Python + Procfile
+
+[[services]]
+  internal_port = 10000
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+    restart_limit = 0
