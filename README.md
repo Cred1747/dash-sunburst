@@ -4,7 +4,7 @@ An interactive web app built with Dash and Plotly to explore topic clusters gene
 Created by **Chris Reddish**, this visualization breaks down sentiment-driven topics into a **sunburst chart** where you can click to view real tweet examples per topic.
 
 🌐 **Live App**:  
-👉 (https://dash-sunburst-production.up.railway.app)](https://dash-sunburst.onrender.com)
+👉 https://dash-sunburst.onrender.com
 
 ---
 
