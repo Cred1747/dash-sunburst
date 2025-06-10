@@ -44,7 +44,7 @@ app.layout = html.Div([
         html.Div([
             html.H4("Prime k values"),
             html.Ul([
-                html.Li("BT (Brian Thompson): Positive k = 8, Negative k = 6"),
+                html.Li("BTV3 (Brian Thompson): Positive k = 8, Negative k = 6"),
                 html.Li("LM (Luigi Mangione): Positive k = 8, Negative k = 8")
             ])
         ], style={"width": "60%", "display": "inline-block", "verticalAlign": "top", "margin": "10px"})
